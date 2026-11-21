@@ -1,0 +1,33 @@
+name: Descargar OSM de Valladolid
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 1 * *" # día 1 de cada mes
+
+jobs:
+  osm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Descargar calles, semáforos y radares (Overpass)
+        run: ./gradlew :backend:run --args="fetch-osm $GITHUB_WORKSPACE/valladolid-osm.json" --console=plain
+      - name: Resumen
+        run: |
+          python3 - <<'PY'
+          import json
+          d = json.load(open("valladolid-osm.json"))["elements"]
+          tag = lambda e, v: e.get("tags", {}).get("highway") == v
+          print("semaforos:", sum(1 for e in d if e["type"] == "node" and tag(e, "traffic_signals")))
+          print("radares:", sum(1 for e in d if e["type"] == "node" and tag(e, "speed_camera")))
+          print("vias:", sum(1 for e in d if e["type"] == "way"))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: valladolid-osm
+          path: valladolid-osm.json

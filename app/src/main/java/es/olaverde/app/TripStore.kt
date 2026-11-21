@@ -1,7 +1,7 @@
 package es.olaverde.app
 
 import android.content.Context
-import es.olaverde.core.geo.LatLon
+import es.olaverde.core.io.TripCsv
 import es.olaverde.core.model.GpsPoint
 import es.olaverde.core.stats.TripStats
 import java.io.File
@@ -11,15 +11,11 @@ class TripStore(context: Context) {
     private val dir = File(context.filesDir, "trips").apply { mkdirs() }
 
     fun newTrip(startMillis: Long): File =
-        File(dir, "$startMillis.csv").apply { writeText("t_ms,lat,lon,speed_mps,accuracy_m\n") }
+        File(dir, "$startMillis.csv").apply { writeText(TripCsv.HEADER + "\n") }
 
     fun trips(): List<File> = dir.listFiles { f -> f.extension == "csv" }.orEmpty().sortedByDescending { it.name }
 
-    fun load(file: File): List<GpsPoint> = file.readLines().drop(1).mapNotNull { line ->
-        val c = line.split(',')
-        if (c.size < 4) return@mapNotNull null
-        GpsPoint(c[0].toLong(), LatLon(c[1].toDouble(), c[2].toDouble()), c[3].toDoubleOrNull())
-    }
+    fun load(file: File): List<GpsPoint> = TripCsv.parse(file.readText())
 
     fun delete(file: File) = file.delete()
 
