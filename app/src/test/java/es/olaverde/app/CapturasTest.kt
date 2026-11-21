@@ -16,7 +16,9 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import es.olaverde.app.ui.AppScaffold
 import es.olaverde.app.ui.DriveScreen
 import es.olaverde.app.ui.OlaVerdeTheme
+import es.olaverde.app.ui.SettingsScreen
 import es.olaverde.app.ui.TripsContent
+import es.olaverde.core.advice.GreenWaveAdvice
 import es.olaverde.core.geo.Geo
 import es.olaverde.core.geo.LatLon
 import es.olaverde.core.stats.TripStats
@@ -42,6 +44,26 @@ class CapturasTest {
         RecordingState.end()
         RecordingState.trace.clear()
         RecordingState.lastPosition.value = null
+        RecordingState.route.value = null
+        RecordingState.routeStatus.value = null
+        Settings.LIMITS.forEach { Settings.preferred[it] = it }
+    }
+
+    @Test fun conducir_ola_verde() {
+        fakeTrip()
+        RecordingState.advice.value = GreenWaveAdvice(speedKmh = 43, minKmh = 38, maxKmh = 48, greensInRow = 3, signalsAhead = 3)
+        shot("conducir_ola_verde", dark = false) { drive() }
+    }
+
+    @Test fun conducir_ruta() {
+        RecordingState.route.value = RouteResult(emptyList(), 14 * 60.0, 6_200.0, 45.0, 2, 16 * 60.0 + 20, 5_800.0, 140.0)
+        shot("conducir_ruta", dark = false) { drive() }
+    }
+
+    @Test fun ajustes() {
+        Settings.serverUrl.value = "https://ola-verde.example.org"
+        Settings.preferred[50] = 45
+        shot("ajustes", dark = false, tab = 2) { SettingsScreen(onChanged = {}) }
     }
 
     @Test fun conducir_listo() = shot("conducir_listo", dark = false) { drive() }

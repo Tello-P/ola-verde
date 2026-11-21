@@ -4,6 +4,8 @@ import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import es.olaverde.core.advice.GreenWaveAdvice
+import es.olaverde.core.advice.KnownSignal
 import es.olaverde.core.geo.Geo
 import es.olaverde.core.geo.LatLon
 
@@ -17,6 +19,15 @@ object RecordingState {
     val trace = mutableStateListOf<LatLon>()
     /** Última posición conocida, aunque no se esté grabando. */
     val lastPosition = mutableStateOf<LatLon?>(null)
+
+    /** Semáforos cercanos descargados del servidor. */
+    val signals = mutableStateOf<List<KnownSignal>>(emptyList())
+    /** Consejo de ola verde actual (null = sin semáforos conocidos delante). */
+    val advice = mutableStateOf<GreenWaveAdvice?>(null)
+    val destination = mutableStateOf<LatLon?>(null)
+    val route = mutableStateOf<RouteResult?>(null)
+    /** Mensaje sobre la ruta: calculando, error… */
+    val routeStatus = mutableStateOf<String?>(null)
 
     private var stoppedSince: Long? = null
 
@@ -46,6 +57,7 @@ object RecordingState {
 
     fun end() {
         recording.value = false
+        advice.value = null
         speedKmh.doubleValue = 0.0
     }
 }

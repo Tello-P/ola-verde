@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,6 +37,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import es.olaverde.app.RecordingState
+import es.olaverde.app.RouteResult
+import es.olaverde.core.advice.GreenWaveAdvice
+import es.olaverde.core.advice.VoicePrompts
+import es.olaverde.core.geo.LatLon
 import kotlinx.coroutines.delay
 
 @Composable
@@ -45,6 +51,8 @@ fun DriveScreen(
     /** Sustituible en capturas y tests, donde el mapa nativo no puede dibujarse. */
     map: (@Composable (Modifier) -> Unit)? = null,
     liveClock: Boolean = true,
+    onPickDestination: (LatLon) -> Unit = {},
+    onClearRoute: () -> Unit = {},
 ) {
     val recording by RecordingState.recording
     val start by RecordingState.startMillis
@@ -52,6 +60,11 @@ fun DriveScreen(
     val speed by RecordingState.speedKmh
     val stops by RecordingState.stops
     val position by RecordingState.lastPosition
+    val advice by RecordingState.advice
+    val signals by RecordingState.signals
+    val route by RecordingState.route
+    val destination by RecordingState.destination
+    val routeStatus by RecordingState.routeStatus
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(recording, liveClock) {
@@ -64,7 +77,21 @@ fun DriveScreen(
     Box(Modifier.fillMaxSize()) {
         val mapModifier = Modifier.fillMaxSize()
         if (map != null) map(mapModifier)
-        else TripMap(trace = RecordingState.trace, position = position, follow = recording, modifier = mapModifier)
+        else TripMap(
+            trace = RecordingState.trace,
+            position = position,
+            follow = recording,
+            modifier = mapModifier,
+            signals = signals,
+            route = route?.points,
+            destination = destination,
+            onLongPress = onPickDestination,
+        )
+
+        val currentAdvice = advice
+        if (recording && currentAdvice != null) {
+            AdviceCard(currentAdvice, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(16.dp))
+        }
 
         Surface(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
@@ -85,13 +112,19 @@ fun DriveScreen(
                 } else {
                     Text(
                         if (hasLocationPermission) {
-                            "Pulsa antes de arrancar. Cada viaje enseña a la app cómo cambian los semáforos de tu ruta."
+                            "Pulsa antes de arrancar. Mantén pulsado el mapa para elegir destino y te propongo la ruta con menos esperas."
                         } else {
                             "Necesitamos tu ubicación para grabar el viaje. Solo se usa mientras grabas."
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+
+                val currentRoute = route
+                if (currentRoute != null) RouteSummary(currentRoute, onClearRoute)
+                else if (routeStatus != null) {
+                    Text(routeStatus.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 BigButton(recording, onClick = if (recording) onStop else onStart)
@@ -104,6 +137,62 @@ fun DriveScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AdviceCard(advice: GreenWaveAdvice, modifier: Modifier) {
+    Surface(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), shadowElevation = 8.dp, tonalElevation = 2.dp) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(76.dp).background(Signal.green, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${VoicePrompts.easySpeed(advice)}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("km/h", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text("Ola verde", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (advice.greensInRow == 1) "A este ritmo pillas el próximo semáforo en verde"
+                    else "A este ritmo pillas ${advice.greensInRow} semáforos seguidos en verde",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Vale entre ${advice.minKmh} y ${advice.maxKmh} km/h",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteSummary(route: RouteResult, onClear: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(16.dp)) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "${duration(route.durationSec.toLong())} · ${km(route.distanceM)} km · ${route.signals} semáforos",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                val saved = (route.savedSec / 60).toInt()
+                Text(
+                    if (saved >= 1) "Ahorras $saved min frente a la más corta (${km(route.shortestDistanceM)} km)"
+                    else "Igual de rápida que la ruta más corta",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            TextButton(onClick = onClear) { Text("Quitar") }
         }
     }
 }
