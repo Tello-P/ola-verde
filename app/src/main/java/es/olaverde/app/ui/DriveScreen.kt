@@ -38,7 +38,14 @@ import es.olaverde.app.RecordingState
 import kotlinx.coroutines.delay
 
 @Composable
-fun DriveScreen(hasLocationPermission: Boolean, onStart: () -> Unit, onStop: () -> Unit) {
+fun DriveScreen(
+    hasLocationPermission: Boolean,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    /** Sustituible en capturas y tests, donde el mapa nativo no puede dibujarse. */
+    map: (@Composable (Modifier) -> Unit)? = null,
+    liveClock: Boolean = true,
+) {
     val recording by RecordingState.recording
     val start by RecordingState.startMillis
     val distance by RecordingState.distanceM
@@ -47,20 +54,17 @@ fun DriveScreen(hasLocationPermission: Boolean, onStart: () -> Unit, onStop: () 
     val position by RecordingState.lastPosition
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(recording) {
-        while (recording) {
+    LaunchedEffect(recording, liveClock) {
+        while (recording && liveClock) {
             now = System.currentTimeMillis()
             delay(1_000)
         }
     }
 
     Box(Modifier.fillMaxSize()) {
-        TripMap(
-            trace = RecordingState.trace,
-            position = position,
-            follow = recording,
-            modifier = Modifier.fillMaxSize(),
-        )
+        val mapModifier = Modifier.fillMaxSize()
+        if (map != null) map(mapModifier)
+        else TripMap(trace = RecordingState.trace, position = position, follow = recording, modifier = mapModifier)
 
         Surface(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
