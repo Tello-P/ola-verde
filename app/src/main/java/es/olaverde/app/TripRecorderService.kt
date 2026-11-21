@@ -10,8 +10,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.Looper
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.google.android.gms.location.LocationCallback
@@ -19,6 +17,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import es.olaverde.core.geo.LatLon
 import java.io.BufferedWriter
 import java.io.FileWriter
 
@@ -34,7 +33,7 @@ class TripRecorderService : Service() {
             for (loc in result.locations) {
                 val speed = if (loc.hasSpeed()) loc.speed.toString() else ""
                 w.write("${loc.time},${loc.latitude},${loc.longitude},$speed,${loc.accuracy}\n")
-                points.intValue++
+                RecordingState.add(loc.time, LatLon(loc.latitude, loc.longitude), if (loc.hasSpeed()) loc.speed.toDouble() else null)
             }
             w.flush()
         }
@@ -52,10 +51,10 @@ class TripRecorderService : Service() {
         ServiceCompat.startForeground(
             this, NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
         )
-        val file = TripStore(this).newTrip(System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        val file = TripStore(this).newTrip(now)
         writer = BufferedWriter(FileWriter(file, true))
-        points.intValue = 0
-        recording.value = true
+        RecordingState.begin(now)
 
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
             .setMinUpdateIntervalMillis(1_000L)
@@ -72,7 +71,7 @@ class TripRecorderService : Service() {
         client.removeLocationUpdates(callback)
         writer?.close()
         writer = null
-        recording.value = false
+        RecordingState.end()
         super.onDestroy()
     }
 
@@ -98,9 +97,6 @@ class TripRecorderService : Service() {
         private const val CHANNEL_ID = "trip"
         private const val NOTIFICATION_ID = 1
         private const val ACTION_STOP = "es.olaverde.app.STOP"
-
-        val recording = mutableStateOf(false)
-        val points = mutableIntStateOf(0)
 
         fun start(context: Context) =
             context.startForegroundService(Intent(context, TripRecorderService::class.java))
