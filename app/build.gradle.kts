@@ -4,6 +4,7 @@ plugins {
     id("com.android.application") version "8.7.3"
     id("org.jetbrains.kotlin.android") version "2.1.0"
     id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
+    id("io.github.takahirom.roborazzi") version "1.40.1"
 }
 
 android {
@@ -19,6 +20,12 @@ android {
     }
 
     buildFeatures { compose = true }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -41,5 +48,14 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.maplibre.gl:android-sdk:11.13.5")
+
+    // Capturas de pantalla (Robolectric + Roborazzi), sin emulador.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.40.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.40.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation("com.google.android.gms:play-services-location:21.3.0")
 }
