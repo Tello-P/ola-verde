@@ -6,7 +6,7 @@ package es.olaverde.core.routing
  * - si no → la velocidad que elige el usuario para ese límite, acotada al límite;
  * - si hay velocidad real observada menor (tráfico), se usa esa.
  */
-class SpeedPolicy(preferredKmhByLimit: Map<Int, Double> = emptyMap()) {
+open class SpeedPolicy(preferredKmhByLimit: Map<Int, Double> = emptyMap()) {
     private val preferred: Map<Int, Double> =
         preferredKmhByLimit.mapValues { (limit, v) -> v.coerceIn(1.0, limit.toDouble()) }
 
@@ -16,5 +16,5 @@ class SpeedPolicy(preferredKmhByLimit: Map<Int, Double> = emptyMap()) {
         return edge.observedKmh?.let { minOf(it, base) } ?: base
     }
 
-    fun travelSec(edge: Edge): Double = edge.lengthM / (speedKmh(edge) / 3.6)
+    open fun travelSec(edge: Edge): Double = edge.lengthM / (speedKmh(edge) / 3.6)
 }

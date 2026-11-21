@@ -1,0 +1,11 @@
+{
+  "version": 0.6,
+  "elements": [
+    {"type": "node", "id": 2, "lat": 41.6532, "lon": -4.7245, "tags": {"highway": "traffic_signals"}},
+    {"type": "node", "id": 9, "lat": 41.6541, "lon": -4.7245, "tags": {"highway": "speed_camera", "maxspeed": "40"}},
+    {"type": "way", "id": 10, "nodes": [1, 2, 3], "tags": {"highway": "primary", "maxspeed": "50", "name": "Calle de prueba"}},
+    {"type": "node", "id": 1, "lat": 41.6514, "lon": -4.7245},
+    {"type": "node", "id": 2, "lat": 41.6532, "lon": -4.7245},
+    {"type": "node", "id": 3, "lat": 41.6550, "lon": -4.7245}
+  ]
+}

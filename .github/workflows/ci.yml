@@ -15,11 +15,68 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Tests del core
-        run: ./gradlew :core:test --console=plain
+      - name: Tests del core y backend (H2)
+        run: ./gradlew :core:test :backend:test --console=plain
       - name: Compilar app Android
         run: ./gradlew :app:assembleDebug --console=plain
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+
+  backend-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ov
+          POSTGRES_PASSWORD: ov
+          POSTGRES_DB: ov
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests del backend contra PostgreSQL
+        env:
+          TEST_DATABASE_URL: jdbc:postgresql://localhost:5432/ov
+          TEST_DATABASE_USER: ov
+          TEST_DATABASE_PASSWORD: ov
+        run: ./gradlew :backend:test --console=plain
+
+  capturas:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Generar capturas de pantalla
+        run: ./gradlew :app:recordRoborazziDebug --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas
+          path: app/build/capturas/*.png
+      - name: Guardar capturas en docs/capturas
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          mkdir -p docs/capturas
+          cp app/build/capturas/*.png docs/capturas/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/capturas
+          if git diff --cached --quiet; then echo "Sin cambios en las capturas"; exit 0; fi
+          git commit -m "Actualizar capturas de pantalla [skip ci]"
+          git push

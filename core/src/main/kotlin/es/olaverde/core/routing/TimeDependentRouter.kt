@@ -77,4 +77,35 @@ class TimeDependentRouter(
         }
         return Route(path.toList(), departSec, arrive, distance, wait, signals)
     }
+
+    /** Tiempo esperado de un camino dado (p. ej. la ruta más corta) con las esperas aprendidas. */
+    fun evaluate(nodeIds: List<String>, departSec: Double): Route? {
+        if (nodeIds.size < 2) return null
+        var t = departSec
+        var distance = 0.0
+        var wait = 0.0
+        var signals = 0
+        for (i in 0 until nodeIds.size - 1) {
+            val e = graph.outgoing[nodeIds[i]].orEmpty().firstOrNull { it.to == nodeIds[i + 1] } ?: return null
+            t += speeds.travelSec(e)
+            distance += e.lengthM
+            val last = i + 1 == nodeIds.size - 1
+            val signal = graph.nodes.getValue(e.to).signalId
+            if (signal != null && !last) {
+                val w = waits.expectedWaitSec(signal, t)
+                t += w; wait += w; signals++
+            }
+        }
+        return Route(nodeIds, departSec, t, distance, wait, signals)
+    }
+
+    companion object {
+        /** Ruta más corta en distancia, como haría un navegador que ignora los semáforos. */
+        fun shortest(graph: RoadGraph, from: String, to: String): List<String>? {
+            val router = TimeDependentRouter(graph, object : SpeedPolicy() {
+                override fun travelSec(edge: Edge) = edge.lengthM
+            }, WaitProvider { _, _ -> 0.0 })
+            return router.route(from, to, 0.0)?.nodeIds
+        }
+    }
 }

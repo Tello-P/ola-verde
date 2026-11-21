@@ -18,7 +18,9 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import es.olaverde.core.geo.LatLon
+import android.util.Log
 import java.io.BufferedWriter
+import java.io.File
 import java.io.FileWriter
 
 /** Servicio en primer plano que graba el GPS a 1 Hz mientras dura el viaje. */
@@ -26,6 +28,8 @@ class TripRecorderService : Service() {
 
     private val client by lazy { LocationServices.getFusedLocationProviderClient(this) }
     private var writer: BufferedWriter? = null
+    private var tripFile: File? = null
+    private var guidance: Guidance? = null
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -33,7 +37,10 @@ class TripRecorderService : Service() {
             for (loc in result.locations) {
                 val speed = if (loc.hasSpeed()) loc.speed.toString() else ""
                 w.write("${loc.time},${loc.latitude},${loc.longitude},$speed,${loc.accuracy}\n")
-                RecordingState.add(loc.time, LatLon(loc.latitude, loc.longitude), if (loc.hasSpeed()) loc.speed.toDouble() else null)
+                val pos = LatLon(loc.latitude, loc.longitude)
+                val speedMps = if (loc.hasSpeed()) loc.speed.toDouble() else null
+                RecordingState.add(loc.time, pos, speedMps)
+                guidance?.onLocation(loc.time, pos, speedMps, if (loc.hasBearing()) loc.bearing.toDouble() else null)
             }
             w.flush()
         }
@@ -51,9 +58,12 @@ class TripRecorderService : Service() {
         ServiceCompat.startForeground(
             this, NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
         )
+        Settings.load(this)
         val now = System.currentTimeMillis()
         val file = TripStore(this).newTrip(now)
+        tripFile = file
         writer = BufferedWriter(FileWriter(file, true))
+        guidance = Guidance(this)
         RecordingState.begin(now)
 
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
@@ -71,8 +81,23 @@ class TripRecorderService : Service() {
         client.removeLocationUpdates(callback)
         writer?.close()
         writer = null
+        guidance?.close()
+        guidance = null
         RecordingState.end()
+        tripFile?.let { upload(it) }
+        tripFile = null
         super.onDestroy()
+    }
+
+    /** Envía el viaje al servidor para que aprenda los semáforos (si hay servidor configurado). */
+    private fun upload(file: File) {
+        val url = Settings.serverUrl.value
+        if (url.isBlank()) return
+        val device = Settings.deviceId.value
+        Thread {
+            runCatching { ApiClient(url).uploadTrip(device, file.readText()) }
+                .onFailure { Log.w("OlaVerde", "No se pudo subir el viaje: ${it.message}") }
+        }.start()
     }
 
     private fun notification(): Notification {
