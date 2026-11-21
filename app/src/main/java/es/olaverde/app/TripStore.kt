@@ -3,6 +3,7 @@ package es.olaverde.app
 import android.content.Context
 import es.olaverde.core.geo.LatLon
 import es.olaverde.core.model.GpsPoint
+import es.olaverde.core.stats.TripStats
 import java.io.File
 
 /** Viajes guardados como CSV (t_ms,lat,lon,velocidad_mps,precision_m) en el almacenamiento privado de la app. */
@@ -21,4 +22,8 @@ class TripStore(context: Context) {
     }
 
     fun delete(file: File) = file.delete()
+
+    /** Resumen de cada viaje guardado (los vacíos se omiten). */
+    fun summaries(): List<Pair<File, TripStats>> =
+        trips().mapNotNull { f -> runCatching { TripStats.of(load(f)) }.getOrNull()?.let { f to it } }
 }

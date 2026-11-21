@@ -7,7 +7,7 @@ App Android que aprende los ciclos de los semáforos con el GPS de tus viajes y 
 | Módulo | Contenido |
 | --- | --- |
 | `core` | Kotlin puro: detección de paradas en semáforos, estimación de ciclo/desfase, rutas dependientes de la hora, política de velocidad (tope legal, radares), ola verde |
-| `app` | Android (Compose): grabación de viajes en segundo plano a 1 Hz, guardados en CSV |
+| `app` | Android (Compose): mapa con el recorrido en vivo (MapLibre + OpenFreeMap), grabación a 1 Hz en CSV, lista de viajes con duración, km y paradas |
 
 ## Comandos
 
