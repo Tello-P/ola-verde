@@ -47,27 +47,7 @@ fun TripsScreen(store: TripStore) {
     }
     var toDelete by remember { mutableStateOf<File?>(null) }
 
-    Column(Modifier.fillMaxSize()) {
-        Text(
-            "Tus viajes",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 20.dp, top = 24.dp, end = 20.dp, bottom = 8.dp),
-        )
-        val list = trips
-        when {
-            list == null -> Unit
-            list.isEmpty() -> EmptyState()
-            else -> LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(list, key = { it.first.name }) { (file, stats) ->
-                    TripCard(stats, onDelete = { toDelete = file })
-                }
-            }
-        }
-    }
+    TripsContent(trips, onDelete = { toDelete = it })
 
     toDelete?.let { file ->
         AlertDialog(
@@ -79,6 +59,31 @@ fun TripsScreen(store: TripStore) {
             },
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancelar") } },
         )
+    }
+}
+
+/** Lista sin estado: [trips] null = cargando. */
+@Composable
+fun TripsContent(trips: List<Pair<File, TripStats>>?, onDelete: (File) -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        Text(
+            "Tus viajes",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 20.dp, top = 24.dp, end = 20.dp, bottom = 8.dp),
+        )
+        when {
+            trips == null -> Unit
+            trips.isEmpty() -> EmptyState()
+            else -> LazyColumn(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(trips, key = { it.first.name }) { (file, stats) ->
+                    TripCard(stats, onDelete = { onDelete(file) })
+                }
+            }
+        }
     }
 }
 

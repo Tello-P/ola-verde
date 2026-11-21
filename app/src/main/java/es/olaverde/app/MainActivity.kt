@@ -9,18 +9,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -28,9 +16,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import es.olaverde.app.ui.AppScaffold
 import es.olaverde.app.ui.DriveScreen
 import es.olaverde.app.ui.OlaVerdeTheme
 import es.olaverde.app.ui.TripsScreen
@@ -64,35 +52,16 @@ private fun App() {
         if (hasPermission) TripRecorderService.start(context)
     }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = tab == 0,
-                    onClick = { tab = 0 },
-                    icon = { Icon(Icons.Filled.Place, contentDescription = null) },
-                    label = { Text("Conducir") },
-                )
-                NavigationBarItem(
-                    selected = tab == 1,
-                    onClick = { tab = 1 },
-                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-                    label = { Text("Viajes") },
-                )
-            }
-        },
-    ) { inner ->
-        Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
-            when (tab) {
-                0 -> DriveScreen(
-                    hasLocationPermission = hasPermission,
-                    onStart = {
-                        if (hasPermission) TripRecorderService.start(context) else launcher.launch(permissions)
-                    },
-                    onStop = { TripRecorderService.stop(context) },
-                )
-                else -> Box(Modifier.statusBarsPadding()) { TripsScreen(store) }
-            }
+    AppScaffold(tab = tab, onTab = { tab = it }) {
+        when (tab) {
+            0 -> DriveScreen(
+                hasLocationPermission = hasPermission,
+                onStart = {
+                    if (hasPermission) TripRecorderService.start(context) else launcher.launch(permissions)
+                },
+                onStop = { TripRecorderService.stop(context) },
+            )
+            else -> TripsScreen(store)
         }
     }
 }

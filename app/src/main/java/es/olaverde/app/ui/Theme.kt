@@ -42,6 +42,6 @@ object Signal {
 }
 
 @Composable
-fun OlaVerdeTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dark else Light, content = content)
+fun OlaVerdeTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = if (darkTheme) Dark else Light, content = content)
 }
