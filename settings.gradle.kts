@@ -28,7 +28,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "ola-verde"
 
-include(":core")
+include(":core", ":backend")
 
 // El módulo Android solo se incluye si hay SDK disponible (CI o Android Studio).
 val sdkAvailable = System.getenv("ANDROID_HOME") != null ||
