@@ -79,4 +79,20 @@ class ApiTest {
         val res = client.post("/v1/trips") { setBody(TripCsv.HEADER + "\n") }
         assertEquals(HttpStatusCode.BadRequest, res.status)
     }
+
+    @Test
+    fun `calcula ruta y la compara con la mas corta`() = testApplication {
+        val s = services()
+        application { olaVerde(s) }
+        val res = client.get("/v1/route?from=41.6514,-4.7245&to=41.6550,-4.7245&t=${base * 1000}&v50=60")
+        assertEquals(HttpStatusCode.OK, res.status, res.bodyAsText())
+        val route = json.decodeFromString<RouteDto>(res.bodyAsText())
+        assertEquals(3, route.points.size)
+        assertEquals(1, route.route.signals)
+        // 400 m: 200 m a 50 (v50=60 se acota a 50) + 200 m a 40 por el radar + espera por defecto (sin datos).
+        val expected = 200 / (50 / 3.6) + 200 / (40 / 3.6) + SignalModel.DEFAULT_UNKNOWN_WAIT_SEC
+        assertEquals(expected, route.route.durationSec, 1.0)
+        val signals = json.decodeFromString<List<SignalDto>>(client.get("/v1/signals?bbox=-4.73,41.65,-4.72,41.66").bodyAsText())
+        assertEquals(50, signals.single().limitKmh)
+    }
 }

@@ -4,7 +4,12 @@ import es.olaverde.core.detection.SignalEventDetector
 import es.olaverde.core.estimation.CycleEstimator
 import es.olaverde.core.estimation.SignalModel
 import es.olaverde.core.estimation.TimeBand
+import es.olaverde.core.geo.LatLon
 import es.olaverde.core.io.TripCsv
+import es.olaverde.core.routing.ModelWaitProvider
+import es.olaverde.core.routing.Route
+import es.olaverde.core.routing.SpeedPolicy
+import es.olaverde.core.routing.TimeDependentRouter
 import es.olaverde.core.model.SignalObservation
 import es.olaverde.core.osm.OsmArea
 import es.olaverde.core.stats.TripStats
@@ -23,7 +28,16 @@ import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
 
 @Serializable data class ModelDto(val cycleSec: Double, val greenStartPhaseSec: Double, val redSec: Double, val confidence: Double, val samples: Int)
-@Serializable data class SignalDto(val id: String, val lat: Double, val lon: Double, val model: ModelDto? = null)
+@Serializable data class SignalDto(val id: String, val lat: Double, val lon: Double, val model: ModelDto? = null, val limitKmh: Int? = null)
+@Serializable data class RouteSummaryDto(val durationSec: Double, val distanceM: Double, val waitSec: Double, val signals: Int)
+@Serializable data class RouteDto(
+    /** [[lat, lon], ...] */
+    val points: List<List<Double>>,
+    val route: RouteSummaryDto,
+    /** La ruta más corta en km, con las esperas aprendidas, para comparar. */
+    val shortest: RouteSummaryDto,
+    val savedSec: Double,
+)
 @Serializable data class CameraDto(val id: String, val lat: Double, val lon: Double, val maxKmh: Int? = null)
 @Serializable data class TripResultDto(val tripId: Long, val durationSec: Long, val distanceM: Double, val stops: Int, val observations: Int)
 @Serializable data class ErrorDto(val error: String)
@@ -53,8 +67,34 @@ class Services(
     fun signals(b: BBox, tMillis: Long): List<SignalDto> {
         val signals = db.signalsIn(b)
         val models = models(signals.map { it.id }, tMillis)
-        return signals.map { SignalDto(it.id, it.pos.lat, it.pos.lon, models[it.id]?.toDto()) }
+        val graph = area?.graph
+        return signals.map { SignalDto(it.id, it.pos.lat, it.pos.lon, models[it.id]?.toDto(), graph?.approachLimitKmh(it.id)) }
     }
+
+    /**
+     * Ruta más rápida contando las esperas aprendidas en cada semáforo, comparada con la más corta.
+     * [preferredKmh] = velocidad del usuario por límite; siempre se acota al límite legal.
+     */
+    fun route(from: LatLon, to: LatLon, tMillis: Long, preferredKmh: Map<Int, Double>): RouteDto {
+        val graph = requireNotNull(area?.graph) { "No hay mapa cargado en el servidor" }
+        val a = requireNotNull(graph.nearestNode(from)) { "Origen fuera del mapa" }
+        val b = requireNotNull(graph.nearestNode(to)) { "Destino fuera del mapa" }
+        val ids = graph.nodes.values.mapNotNull { it.signalId }
+        val models = models(ids, tMillis)
+        val router = TimeDependentRouter(graph, SpeedPolicy(preferredKmh), ModelWaitProvider { id, _ -> models[id] })
+        val depart = tMillis / 1000.0
+        val best = requireNotNull(router.route(a.id, b.id, depart)) { "No hay ruta entre esos puntos" }
+        val shortestPath = requireNotNull(TimeDependentRouter.shortest(graph, a.id, b.id))
+        val shortest = requireNotNull(router.evaluate(shortestPath, depart))
+        return RouteDto(
+            points = best.nodeIds.map { graph.nodes.getValue(it).pos.let { p -> listOf(p.lat, p.lon) } },
+            route = best.toSummary(),
+            shortest = shortest.toSummary(),
+            savedSec = (shortest.durationSec - best.durationSec).coerceAtLeast(0.0),
+        )
+    }
+
+    private fun Route.toSummary() = RouteSummaryDto(durationSec, distanceM, waitSec, signals)
 
     fun models(signalIds: Collection<String>, tMillis: Long): Map<String, SignalModel> {
         val band = TimeBand.of(tMillis)
@@ -95,6 +135,20 @@ fun Application.olaVerde(services: Services) {
             val b = BBox.parse(requireNotNull(call.request.queryParameters["bbox"]) { "Falta bbox" })
             val t = call.request.queryParameters["t"]?.toLongOrNull() ?: System.currentTimeMillis()
             call.respond(services.signals(b, t))
+        }
+
+        get("/v1/route") {
+            val q = call.request.queryParameters
+            fun point(name: String): LatLon {
+                val v = requireNotNull(q[name]) { "Falta $name=lat,lon" }.split(',').map { it.trim().toDouble() }
+                require(v.size == 2) { "$name = lat,lon" }
+                return LatLon(v[0], v[1])
+            }
+            // v30=28&v50=45 … velocidad preferida por límite
+            val preferred = q.names().filter { it.matches(Regex("v\\d+")) }
+                .associate { it.drop(1).toInt() to q[it]!!.toDouble() }
+            val t = q["t"]?.toLongOrNull() ?: System.currentTimeMillis()
+            call.respond(services.route(point("from"), point("to"), t, preferred))
         }
 
         get("/v1/cameras") {
